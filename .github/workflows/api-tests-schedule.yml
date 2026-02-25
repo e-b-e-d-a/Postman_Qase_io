@@ -1,0 +1,31 @@
+name: Scheduled API tests (Postman -> Qase)
+
+on:
+  schedule:
+    # cron в GitHub Actions = UTC
+    # пример: каждый день в 05:00 UTC (09:00 Ереван)
+    - cron: "0 5 * * *"
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+          cache: "npm"
+
+      - name: Install deps
+        run: npm ci
+
+      - name: Run Newman with Qase
+        env:
+          QASE_API_TOKEN: ${{ secrets.QASE_API_TOKEN }}
+          QASE_PROJECT_CODE: ${{ secrets.QASE_PROJECT_CODE }}
+          QASE_RUN_NAME: "Scheduled run #${{ github.run_number }}"
+        run: npm test
