@@ -25,6 +25,8 @@ jobs:
 
       - name: Run Newman with Qase
         env:
+          QASE_MODE: testops
+          QASE_DEBUG: "True"
           QASE_API_TOKEN: ${{ secrets.QASE_API_TOKEN }}
           QASE_PROJECT_CODE: ${{ secrets.QASE_PROJECT_CODE }}
           QASE_RUN_NAME: "Scheduled run #${{ github.run_number }}"
