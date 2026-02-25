@@ -5,7 +5,7 @@
     "test": "newman run postman/collection.json -e postman/env.json -r qase"
   },
   "devDependencies": {
-    "newman": "^6.0.0",
-    "newman-reporter-qase": "^1.0.0"
+    "newman": "^6.2.2",
+    "newman-reporter-qase": "^1.0.7"
   }
 }
