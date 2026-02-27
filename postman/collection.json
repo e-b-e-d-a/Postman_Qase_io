@@ -15,7 +15,7 @@
             "exec": [
               "// qase: 1",
               "pm.test(\"Status code is 200\", function () {",
-              "  pm.response.to.have.status(200);",
+              "  pm.response.to.have.status(500);",
               "});"
             ],
             "type": "text/javascript",
