@@ -163,23 +163,43 @@ jobs:
           echo "page_url=$URL" >> "$GITHUB_OUTPUT"
 
   send-slack:
-    name: Send Slack (Mock)
+    name: Send Slack Message
     runs-on: ubuntu-latest
     needs:
       - init-release
       - create-confluence-draft
 
     steps:
-      - name: Mock message
-        run: |
-          echo "======================="
-          echo "Message to #b2b_team"
-          echo "======================="
+      - name: Install jq
+        run: sudo apt-get update && sudo apt-get install -y jq
 
-          echo "${{ needs.init-release.outputs.tags }}"
-          echo ""
-          echo "${{ needs.init-release.outputs.title }}"
-          echo "${{ needs.create-confluence-draft.outputs.page_url }}"
+      - name: Send message to Slack
+        shell: bash
+        env:
+          WEBHOOK: ${{ secrets.SLACK_WEBHOOK_URL }}
+          TAGS: ${{ needs.init-release.outputs.tags }}
+          TITLE: ${{ needs.init-release.outputs.title }}
+          URL: ${{ needs.create-confluence-draft.outputs.page_url }}
+        run: |
+          jq -n \
+            --arg text "$TAGS\n\n$TITLE\n$URL" \
+            '{text: $text}' > payload.json
+
+          cat payload.json
+
+          HTTP=$(curl -s -o response.txt -w "%{http_code}" \
+            -X POST \
+            -H "Content-Type: application/json" \
+            --data @payload.json \
+            "$WEBHOOK")
+
+          echo "HTTP: $HTTP"
+          cat response.txt
+
+          if [[ "$HTTP" -lt 200 || "$HTTP" -ge 300 ]]; then
+            echo "Slack failed"
+            exit 1
+          fi
 
   generate-release-note:
     name: Generate Artifact
