@@ -1,0 +1,357 @@
+name: Release Flow (Demo)
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release version (e.g. 1.0.0)"
+        required: true
+        default: "1.0.0"
+
+jobs:
+  validate-branch:
+    name: Validate Branch
+    runs-on: ubuntu-latest
+
+    outputs:
+      branch_name: ${{ steps.branch_check.outputs.branch_name }}
+
+    steps:
+      - name: Check branch name
+        id: branch_check
+        shell: bash
+        run: |
+          BRANCH_NAME="${GITHUB_REF#refs/heads/}"
+
+          echo "Current branch: $BRANCH_NAME"
+          echo "branch_name=$BRANCH_NAME" >> "$GITHUB_OUTPUT"
+
+          if [[ "$BRANCH_NAME" == "master" || "$BRANCH_NAME" =~ ^release-.*$ ]]; then
+            echo "Branch is valid"
+          else
+            echo "Invalid branch: $BRANCH_NAME"
+            echo "Allowed branches: master or release-*"
+            exit 1
+          fi
+
+  init-release:
+    name: Init Release
+    runs-on: ubuntu-latest
+    needs: validate-branch
+
+    outputs:
+      project: ${{ steps.meta.outputs.project }}
+      version: ${{ steps.meta.outputs.version }}
+      date: ${{ steps.meta.outputs.date }}
+      title: ${{ steps.meta.outputs.title }}
+      tags: ${{ steps.meta.outputs.tags }}
+      branch_name: ${{ steps.meta.outputs.branch_name }}
+
+    env:
+      PROJECT: postman-test
+
+    steps:
+      - name: Prepare release metadata
+        id: meta
+        shell: bash
+        run: |
+          VERSION="${{ github.event.inputs.version }}"
+          DATE=$(date +'%d.%m.%Y')
+          SHORT_DATE=$(date +'%d.%m')
+          BRANCH_NAME="${{ needs.validate-branch.outputs.branch_name }}"
+
+          TITLE="Draft $PROJECT v$VERSION"
+          TAGS="#releaseb2b #релиз$SHORT_DATE #$PROJECT v$VERSION"
+
+          echo "project=$PROJECT" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "date=$DATE" >> "$GITHUB_OUTPUT"
+          echo "title=$TITLE" >> "$GITHUB_OUTPUT"
+          echo "tags=$TAGS" >> "$GITHUB_OUTPUT"
+          echo "branch_name=$BRANCH_NAME" >> "$GITHUB_OUTPUT"
+
+      - name: Debug output
+        shell: bash
+        run: |
+          echo "Project: ${{ steps.meta.outputs.project }}"
+          echo "Version: ${{ steps.meta.outputs.version }}"
+          echo "Title: ${{ steps.meta.outputs.title }}"
+          echo "Date: ${{ steps.meta.outputs.date }}"
+          echo "Tags: ${{ steps.meta.outputs.tags }}"
+          echo "Branch: ${{ steps.meta.outputs.branch_name }}"
+
+  create-jira-task:
+    name: Create Jira Task
+    runs-on: ubuntu-latest
+    needs: init-release
+
+    outputs:
+      jira_key: ${{ steps.create.outputs.jira_key }}
+      jira_url: ${{ steps.create.outputs.jira_url }}
+
+    steps:
+      - name: Install jq
+        run: sudo apt-get update && sudo apt-get install -y jq
+
+      - name: Create Jira issue
+        id: create
+        shell: bash
+        env:
+          BASE_URL: ${{ secrets.JIRA_BASE_URL }}
+          EMAIL: ${{ secrets.JIRA_EMAIL }}
+          TOKEN: ${{ secrets.JIRA_API_TOKEN }}
+          PROJECT_KEY: ${{ secrets.JIRA_PROJECT_KEY }}
+          TITLE: ${{ needs.init-release.outputs.title }}
+        run: |
+          jq -n \
+            --arg project "$PROJECT_KEY" \
+            --arg summary "Release: $TITLE" \
+            '{
+              fields: {
+                project: { key: $project },
+                summary: $summary,
+                issuetype: { name: "Task" }
+              }
+            }' > body.json
+
+          HTTP=$(curl -s -o response.json -w "%{http_code}" \
+            -X POST "$BASE_URL/rest/api/3/issue" \
+            -u "$EMAIL:$TOKEN" \
+            -H "Accept: application/json" \
+            -H "Content-Type: application/json" \
+            --data @body.json)
+
+          echo "HTTP: $HTTP"
+          cat response.json
+
+          if [[ "$HTTP" -lt 200 || "$HTTP" -ge 300 ]]; then
+            echo "Failed to create Jira issue"
+            exit 1
+          fi
+
+          KEY=$(jq -r '.key' response.json)
+          URL="$BASE_URL/browse/$KEY"
+
+          echo "jira_key=$KEY" >> "$GITHUB_OUTPUT"
+          echo "jira_url=$URL" >> "$GITHUB_OUTPUT"
+
+      - name: Show Jira data
+        shell: bash
+        run: |
+          echo "Jira key: ${{ steps.create.outputs.jira_key }}"
+          echo "Jira url: ${{ steps.create.outputs.jira_url }}"
+
+  create-confluence-page:
+    name: Create Confluence Page
+    runs-on: ubuntu-latest
+    needs:
+      - init-release
+      - create-jira-task
+
+    outputs:
+      confluence_page_url: ${{ steps.create_page.outputs.confluence_page_url }}
+
+    steps:
+      - name: Install jq
+        run: sudo apt-get update && sudo apt-get install -y jq
+
+      - name: Create Confluence page
+        id: create_page
+        shell: bash
+        env:
+          BASE_URL: ${{ secrets.CONFLUENCE_BASE_URL }}
+          EMAIL: ${{ secrets.CONFLUENCE_EMAIL }}
+          TOKEN: ${{ secrets.CONFLUENCE_API_TOKEN }}
+          SPACE_ID: ${{ secrets.CONFLUENCE_SPACE_ID }}
+          PARENT_ID: ${{ secrets.CONFLUENCE_PARENT_PAGE_ID }}
+
+          TITLE: ${{ needs.init-release.outputs.title }}
+          DATE: ${{ needs.init-release.outputs.date }}
+          BRANCH: ${{ needs.init-release.outputs.branch_name }}
+          TAGS: ${{ needs.init-release.outputs.tags }}
+
+          JIRA_KEY: ${{ needs.create-jira-task.outputs.jira_key }}
+          JIRA_URL: ${{ needs.create-jira-task.outputs.jira_url }}
+        run: |
+          BODY=$(cat <<EOF
+          <h1>${TITLE}</h1>
+          <p><strong>Release planned</strong></p>
+          <p>CP - ${DATE}</p>
+          <p>MF - ${DATE}</p>
+
+          <p><strong>Branch</strong></p>
+          <p>${BRANCH}</p>
+
+          <p><strong>Tags</strong></p>
+          <p>${TAGS}</p>
+
+          <p><strong>Jira task</strong></p>
+          <p><a href="${JIRA_URL}">${JIRA_KEY}</a></p>
+
+          <h2>Release notes</h2>
+          <p>To be filled</p>
+
+          <h2>Env changes</h2>
+          <p>To be filled</p>
+
+          <h2>Jobs to run</h2>
+          <p>To be filled</p>
+
+          <h2>Pre-release tasks</h2>
+          <p>To be filled</p>
+
+          <h2>Release tasks</h2>
+          <p>To be filled</p>
+
+          <h2>Issues</h2>
+          <p>To be filled</p>
+          EOF
+          )
+
+          jq -n \
+            --arg spaceId "$SPACE_ID" \
+            --arg status "current" \
+            --arg title "$TITLE" \
+            --arg parentId "$PARENT_ID" \
+            --arg value "$BODY" \
+            '{
+              spaceId: $spaceId,
+              status: $status,
+              title: $title,
+              parentId: $parentId,
+              body: {
+                representation: "storage",
+                value: $value
+              }
+            }' > body.json
+
+          HTTP=$(curl -s -o response.json -w "%{http_code}" \
+            -X POST "$BASE_URL/wiki/api/v2/pages" \
+            -u "$EMAIL:$TOKEN" \
+            -H "Accept: application/json" \
+            -H "Content-Type: application/json" \
+            --data @body.json)
+
+          echo "HTTP: $HTTP"
+          cat response.json
+
+          if [[ "$HTTP" -lt 200 || "$HTTP" -ge 300 ]]; then
+            echo "Failed to create Confluence page"
+            exit 1
+          fi
+
+          URL=$(jq -r 'if ._links and ._links.base and ._links.webui then (._links.base + ._links.webui) else "" end' response.json)
+
+          if [[ -z "$URL" || "$URL" == "null" ]]; then
+            echo "Confluence page URL not found in response"
+            exit 1
+          fi
+
+          echo "confluence_page_url=$URL" >> "$GITHUB_OUTPUT"
+
+      - name: Show Confluence page
+        shell: bash
+        run: |
+          echo "Confluence url: ${{ steps.create_page.outputs.confluence_page_url }}"
+
+  send-slack:
+    name: Send Slack Message
+    runs-on: ubuntu-latest
+    needs:
+      - init-release
+      - create-jira-task
+      - create-confluence-page
+
+    steps:
+      - name: Install jq
+        run: sudo apt-get update && sudo apt-get install -y jq
+
+      - name: Send message
+        shell: bash
+        env:
+          WEBHOOK: ${{ secrets.SLACK_WEBHOOK_URL }}
+          TAGS: ${{ needs.init-release.outputs.tags }}
+          TITLE: ${{ needs.init-release.outputs.title }}
+          JIRA_KEY: ${{ needs.create-jira-task.outputs.jira_key }}
+          JIRA_URL: ${{ needs.create-jira-task.outputs.jira_url }}
+          PAGE_URL: ${{ needs.create-confluence-page.outputs.confluence_page_url }}
+        run: |
+          jq -n \
+            --arg text "$TAGS\n\n$TITLE\n$JIRA_KEY\n$JIRA_URL\n$PAGE_URL" \
+            '{text: $text}' > payload.json
+
+          cat payload.json
+
+          HTTP=$(curl -s -o slack-response.txt -w "%{http_code}" \
+            -X POST \
+            -H "Content-Type: application/json" \
+            --data @payload.json \
+            "$WEBHOOK")
+
+          echo "HTTP: $HTTP"
+          cat slack-response.txt
+
+          if [[ "$HTTP" -lt 200 || "$HTTP" -ge 300 ]]; then
+            echo "Failed to send Slack message"
+            exit 1
+          fi
+
+  generate-release-note:
+    name: Generate Release Note
+    runs-on: ubuntu-latest
+    needs:
+      - init-release
+      - create-jira-task
+      - create-confluence-page
+
+    steps:
+      - name: Create file
+        shell: bash
+        run: |
+          cat <<EOF > release-note.md
+          # ${{ needs.init-release.outputs.title }}
+
+          **Release planned**
+          - CP: ${{ needs.init-release.outputs.date }}
+          - MF: ${{ needs.init-release.outputs.date }}
+
+          **Branch**
+          - ${{ needs.init-release.outputs.branch_name }}
+
+          **Tags**
+          - ${{ needs.init-release.outputs.tags }}
+
+          **Jira task**
+          - ${{ needs.create-jira-task.outputs.jira_key }}
+          - ${{ needs.create-jira-task.outputs.jira_url }}
+
+          **Confluence page**
+          - ${{ needs.create-confluence-page.outputs.confluence_page_url }}
+
+          ## Release notes
+          _To be filled_
+
+          ## Env changes
+          _To be filled_
+
+          ## Jobs to run
+          _To be filled_
+
+          ## Pre-release tasks
+          _To be filled_
+
+          ## Release tasks
+          _To be filled_
+
+          ## Issues
+          _To be filled_
+          EOF
+
+      - name: Show file
+        run: cat release-note.md
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-note
+          path: release-note.md
