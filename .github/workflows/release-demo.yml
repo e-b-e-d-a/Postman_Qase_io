@@ -310,49 +310,46 @@ jobs:
           TITLE: ${{ needs.init-release.outputs.title }}
           URL: ${{ needs.create-confluence-page.outputs.page_url }}
         run: |
-          TEXT="$TAGS
+          printf '%s\n\n%s\n%s\n' "$TAGS" "$TITLE" "$URL" > message.txt
+          cat message.txt
 
-  $TITLE
-  $URL"
+          jq -Rs '{text: .}' < message.txt > payload.json
+          cat payload.json
 
-jq -n --arg text "$TEXT" '{text: $text}' > payload.json
-  
-  cat payload.json
-  
-  HTTP=$(curl -s -o response.txt -w "%{http_code}" \
-  -X POST \
--H "Content-Type: application/json" \
-  --data @payload.json \
-  "$WEBHOOK")
+          HTTP=$(curl -s -o response.txt -w "%{http_code}" \
+            -X POST \
+            -H "Content-Type: application/json" \
+            --data @payload.json \
+            "$WEBHOOK")
 
-echo "HTTP: $HTTP"
-  cat response.txt
-  
-  if [[ "$HTTP" -lt 200 || "$HTTP" -ge 300 ]]; then
-  echo "Slack failed"
-  exit 1
-  fi
+          echo "HTTP: $HTTP"
+          cat response.txt
 
-generate-release-note:
-  name: Generate Artifact
-  runs-on: ubuntu-latest
-  needs:
-    - init-release
-    - create-confluence-page
+          if [[ "$HTTP" -lt 200 || "$HTTP" -ge 300 ]]; then
+            echo "Slack failed"
+            exit 1
+          fi
 
-  steps:
-    - name: Create file
-      shell: bash
-      run: |
-        cat <<EOF > release-note.md
-        # ${{ needs.init-release.outputs.title }}
-        
-        Confluence:
-        ${{ needs.create-confluence-page.outputs.page_url }}
-        EOF
+  generate-release-note:
+    name: Generate Artifact
+    runs-on: ubuntu-latest
+    needs:
+      - init-release
+      - create-confluence-page
 
-    - name: Upload artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: release-note
-        path: release-note.md
+    steps:
+      - name: Create file
+        shell: bash
+        run: |
+          cat <<EOF > release-note.md
+          # ${{ needs.init-release.outputs.title }}
+
+          Confluence:
+          ${{ needs.create-confluence-page.outputs.page_url }}
+          EOF
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-note
+          path: release-note.md
