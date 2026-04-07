@@ -107,32 +107,32 @@ jobs:
 
         run: |
           BODY=$(cat <<EOF
-          <h1>${TITLE}</h1>
+<h1>${TITLE}</h1>
 
-          <p><strong>Release planned</strong></p>
-          <p>CP - ${DATE}<br/>MF - ${DATE}</p>
+<p><strong>Release planned:</strong></p>
+<p>CP - ${DATE}<br/>MF - ${DATE}</p>
 
-          <h2>Release notes</h2>
-          <p>${PROJECT} - <a href="${JIRA_RELEASE_URL}">${JIRA_RELEASE_URL}</a></p>
+<h2>Release notes</h2>
+<p>${PROJECT} - <a href="${JIRA_RELEASE_URL}">${JIRA_RELEASE_URL}</a></p>
 
-          <p>#releaseb2b #релиз${SHORT_DATE} #${PROJECT} v${VERSION}</p>
+<p>#releaseb2b #релиз${SHORT_DATE} #${PROJECT} v${VERSION}</p>
 
-          <h2>Env changes</h2>
-          <p>To be filled</p>
+<h2>Env changes</h2>
+<p>To be filled</p>
 
-          <h2>Jobs to run</h2>
-          <p>To be filled</p>
+<h2>Jobs to run</h2>
+<p>To be filled</p>
 
-          <h2>Pre-release tasks</h2>
-          <p>To be filled</p>
+<h2>Pre-release tasks</h2>
+<p>To be filled</p>
 
-          <h2>Release tasks</h2>
-          <p>To be filled</p>
+<h2>Release tasks</h2>
+<p>To be filled</p>
 
-          <h2>Issues</h2>
-          <p><a href="${ISSUES_JQL_URL}">${ISSUES_JQL_URL}</a></p>
-          EOF
-          )
+<h2>Issues</h2>
+<p><a href="${ISSUES_JQL_URL}">${ISSUES_JQL_URL}</a></p>
+EOF
+)
 
           jq -n \
             --arg spaceId "$SPACE_ID" \
@@ -159,6 +159,11 @@ jobs:
 
           echo "HTTP: $HTTP"
           cat response.json
+
+          if [[ "$HTTP" -lt 200 || "$HTTP" -ge 300 ]]; then
+            echo "Failed to create page"
+            exit 1
+          fi
 
           URL=$(jq -r 'if ._links and ._links.base and ._links.webui then (._links.base + ._links.webui) else "" end' response.json)
 
@@ -188,10 +193,14 @@ jobs:
           TITLE: ${{ needs.init-release.outputs.title }}
           URL: ${{ needs.create-confluence-page.outputs.page_url }}
         run: |
-          printf '%s\n\n%s\n%s\n' "$TAGS" "$TITLE" "$URL" > message.txt
+          printf '%s\n\n<%s|%s>\n' "$TAGS" "$URL" "$TITLE" > message.txt
 
-          jq -Rs '{text: .}' < message.txt > payload.json
+          echo "=== Slack message preview ==="
+          cat message.txt
 
+          jq -Rs '{text: ., mrkdwn: true}' < message.txt > payload.json
+
+          echo "=== Slack payload ==="
           cat payload.json
 
           HTTP=$(curl -s -o response.txt -w "%{http_code}" \
@@ -219,11 +228,11 @@ jobs:
       - name: Create file
         run: |
           cat <<EOF > release-note.md
-          # ${{ needs.init-release.outputs.title }}
+# ${{ needs.init-release.outputs.title }}
 
-          Confluence:
-          ${{ needs.create-confluence-page.outputs.page_url }}
-          EOF
+Confluence:
+${{ needs.create-confluence-page.outputs.page_url }}
+EOF
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
