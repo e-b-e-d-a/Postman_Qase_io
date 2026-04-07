@@ -42,6 +42,8 @@ jobs:
       project: ${{ steps.meta.outputs.project }}
       version: ${{ steps.meta.outputs.version }}
       date: ${{ steps.meta.outputs.date }}
+      short_date: ${{ steps.meta.outputs.short_date }}
+      date_iso: ${{ steps.meta.outputs.date_iso }}
       title: ${{ steps.meta.outputs.title }}
       tags: ${{ steps.meta.outputs.tags }}
       branch_name: ${{ steps.meta.outputs.branch_name }}
@@ -57,6 +59,7 @@ jobs:
           VERSION="${{ github.event.inputs.version }}"
           DATE=$(date +'%d.%m.%Y')
           SHORT_DATE=$(date +'%d.%m')
+          DATE_ISO=$(date +'%Y-%m-%d')
           BRANCH_NAME="${{ needs.validate-branch.outputs.branch_name }}"
 
           TITLE="Draft $PROJECT v$VERSION"
@@ -65,12 +68,14 @@ jobs:
           echo "project=$PROJECT" >> "$GITHUB_OUTPUT"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "date=$DATE" >> "$GITHUB_OUTPUT"
+          echo "short_date=$SHORT_DATE" >> "$GITHUB_OUTPUT"
+          echo "date_iso=$DATE_ISO" >> "$GITHUB_OUTPUT"
           echo "title=$TITLE" >> "$GITHUB_OUTPUT"
           echo "tags=$TAGS" >> "$GITHUB_OUTPUT"
           echo "branch_name=$BRANCH_NAME" >> "$GITHUB_OUTPUT"
 
-  create-confluence-draft:
-    name: Create Confluence Draft
+  create-confluence-page:
+    name: Create Confluence Page
     runs-on: ubuntu-latest
     needs: init-release
 
@@ -81,7 +86,7 @@ jobs:
       - name: Install jq
         run: sudo apt-get update && sudo apt-get install -y jq
 
-      - name: Create draft page
+      - name: Create Confluence page
         id: create
         shell: bash
         env:
@@ -92,24 +97,25 @@ jobs:
           PARENT_ID: ${{ secrets.CONFLUENCE_PARENT_PAGE_ID }}
 
           TITLE: ${{ needs.init-release.outputs.title }}
-          DATE: ${{ needs.init-release.outputs.date }}
-          BRANCH: ${{ needs.init-release.outputs.branch_name }}
-          TAGS: ${{ needs.init-release.outputs.tags }}
+          DATE: ${{ needs.init-release.outputs.date_iso }}
+          SHORT_DATE: ${{ needs.init-release.outputs.short_date }}
+          VERSION: ${{ needs.init-release.outputs.version }}
+          PROJECT: ${{ needs.init-release.outputs.project }}
+
+          JIRA_RELEASE_URL: ${{ secrets.JIRA_RELEASE_URL }}
+          ISSUES_JQL_URL: ${{ secrets.ISSUES_JQL_URL }}
+
         run: |
           BODY=$(cat <<EOF
           <h1>${TITLE}</h1>
-          <p><strong>Release planned</strong></p>
-          <p>CP - ${DATE}</p>
-          <p>MF - ${DATE}</p>
 
-          <p><strong>Branch</strong></p>
-          <p>${BRANCH}</p>
-
-          <p><strong>Tags</strong></p>
-          <p>${TAGS}</p>
+          <p><strong>Release planned:</strong></p>
+          <p>CP - ${DATE}<br/>MF - ${DATE}</p>
 
           <h2>Release notes</h2>
-          <p>To be filled</p>
+          <p>${PROJECT} - <a href="${JIRA_RELEASE_URL}">${JIRA_RELEASE_URL}</a></p>
+
+          <p>#releaseb2b #релиз${SHORT_DATE} #${PROJECT} v${VERSION}</p>
 
           <h2>Env changes</h2>
           <p>To be filled</p>
@@ -124,7 +130,7 @@ jobs:
           <p>To be filled</p>
 
           <h2>Issues</h2>
-          <p>To be filled</p>
+          <p><a href="${ISSUES_JQL_URL}">${ISSUES_JQL_URL}</a></p>
           EOF
           )
 
@@ -148,6 +154,7 @@ jobs:
           HTTP=$(curl -s -o response.json -w "%{http_code}" \
             -X POST "$BASE_URL/wiki/api/v2/pages" \
             -u "$EMAIL:$TOKEN" \
+            -H "Accept: application/json" \
             -H "Content-Type: application/json" \
             --data @body.json)
 
@@ -159,7 +166,32 @@ jobs:
             exit 1
           fi
 
-          URL=$(jq -r '._links.base + ._links.webui' response.json)
+          WEBUI=$(jq -r '._links.webui // ""' response.json)
+          PAGE_ID=$(jq -r '.id // ""' response.json)
+
+          echo "WEBUI: $WEBUI"
+          echo "PAGE_ID: $PAGE_ID"
+
+          if [[ -n "$WEBUI" && "$WEBUI" != "null" ]]; then
+            if [[ "$WEBUI" =~ ^https?:// ]]; then
+              URL="$WEBUI"
+            elif [[ "$WEBUI" == /wiki/* ]]; then
+              URL="${BASE_URL%/}$WEBUI"
+            else
+              URL="${BASE_URL%/}/wiki$WEBUI"
+            fi
+          else
+            echo "Failed to extract _links.webui from Confluence response"
+            exit 1
+          fi
+
+          echo "Resolved page URL: $URL"
+
+          if [[ -z "$URL" || "$URL" == "null" ]]; then
+            echo "Failed to build page URL"
+            exit 1
+          fi
+
           echo "page_url=$URL" >> "$GITHUB_OUTPUT"
 
   send-slack:
@@ -167,24 +199,61 @@ jobs:
     runs-on: ubuntu-latest
     needs:
       - init-release
-      - create-confluence-draft
+      - create-confluence-page
 
     steps:
       - name: Install jq
         run: sudo apt-get update && sudo apt-get install -y jq
 
-      - name: Send message to Slack
+      - name: Debug Slack inputs
+        shell: bash
+        env:
+          TITLE: ${{ needs.init-release.outputs.title }}
+          URL: ${{ needs.create-confluence-page.outputs.page_url }}
+          TAGS: ${{ needs.init-release.outputs.tags }}
+        run: |
+          echo "TITLE=$TITLE"
+          echo "URL=$URL"
+          echo "TAGS=$TAGS"
+
+          if [[ -z "$URL" ]]; then
+            echo "URL is empty, cannot send clickable Slack link"
+            exit 1
+          fi
+
+      - name: Send message
         shell: bash
         env:
           WEBHOOK: ${{ secrets.SLACK_WEBHOOK_URL }}
           TAGS: ${{ needs.init-release.outputs.tags }}
           TITLE: ${{ needs.init-release.outputs.title }}
-          URL: ${{ needs.create-confluence-draft.outputs.page_url }}
+          URL: ${{ needs.create-confluence-page.outputs.page_url }}
         run: |
           jq -n \
-            --arg text "$TAGS\n\n$TITLE\n$URL" \
-            '{text: $text}' > payload.json
+            --arg tags "$TAGS" \
+            --arg title "$TITLE" \
+            --arg url "$URL" \
+            '{
+              text: $title,
+              blocks: [
+                {
+                  type: "section",
+                  text: {
+                    type: "mrkdwn",
+                    text: $tags
+                  }
+                },
+                {
+                  type: "section",
+                  text: {
+                    type: "mrkdwn",
+                    text: "<\($url)|\($title)>"
+                  }
+                }
+              ]
+            }' > payload.json
 
+          echo "=== Slack payload ==="
           cat payload.json
 
           HTTP=$(curl -s -o response.txt -w "%{http_code}" \
@@ -206,16 +275,17 @@ jobs:
     runs-on: ubuntu-latest
     needs:
       - init-release
-      - create-confluence-draft
+      - create-confluence-page
 
     steps:
       - name: Create file
+        shell: bash
         run: |
           cat <<EOF > release-note.md
           # ${{ needs.init-release.outputs.title }}
 
           Confluence:
-          ${{ needs.create-confluence-draft.outputs.page_url }}
+          ${{ needs.create-confluence-page.outputs.page_url }}
           EOF
 
       - name: Upload artifact
