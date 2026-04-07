@@ -80,7 +80,7 @@ jobs:
     needs: init-release
 
     outputs:
-      page_url: ${{ steps.create.outputs.page_url }}
+      page_path: ${{ steps.create.outputs.page_path }}
 
     steps:
       - name: Install jq
@@ -166,16 +166,16 @@ jobs:
             exit 1
           fi
 
-          URL=$(jq -r '._links.base + ._links.webui' response.json)
+          PAGE_PATH=$(jq -r '._links.webui // ""' response.json)
 
-          echo "Resolved page URL: $URL"
+          echo "PAGE_PATH=$PAGE_PATH"
 
-          if [[ -z "$URL" || "$URL" == "null" ]]; then
-            echo "Failed to extract page URL"
+          if [[ -z "$PAGE_PATH" || "$PAGE_PATH" == "null" ]]; then
+            echo "Failed to extract page path"
             exit 1
           fi
 
-          echo "page_url=$URL" >> "$GITHUB_OUTPUT"
+          echo "page_path=$PAGE_PATH" >> "$GITHUB_OUTPUT"
 
   send-slack:
     name: Send Slack Message
@@ -191,16 +191,25 @@ jobs:
       - name: Debug Slack inputs
         shell: bash
         env:
+          CONFLUENCE_SITE_URL: ${{ vars.CONFLUENCE_SITE_URL }}
           TITLE: ${{ needs.init-release.outputs.title }}
-          URL: ${{ needs.create-confluence-page.outputs.page_url }}
           TAGS: ${{ needs.init-release.outputs.tags }}
+          PAGE_PATH: ${{ needs.create-confluence-page.outputs.page_path }}
         run: |
-          echo "TITLE=$TITLE"
-          echo "URL=$URL"
-          echo "TAGS=$TAGS"
+          URL="${CONFLUENCE_SITE_URL%/}/wiki${PAGE_PATH}"
 
-          if [[ -z "$URL" ]]; then
-            echo "URL is empty, cannot send clickable Slack link"
+          echo "TITLE=$TITLE"
+          echo "TAGS=$TAGS"
+          echo "PAGE_PATH=$PAGE_PATH"
+          echo "URL=$URL"
+
+          if [[ -z "$PAGE_PATH" ]]; then
+            echo "PAGE_PATH is empty, cannot build clickable Slack link"
+            exit 1
+          fi
+
+          if [[ -z "$CONFLUENCE_SITE_URL" ]]; then
+            echo "CONFLUENCE_SITE_URL is empty"
             exit 1
           fi
 
@@ -208,10 +217,13 @@ jobs:
         shell: bash
         env:
           WEBHOOK: ${{ secrets.SLACK_WEBHOOK_URL }}
+          CONFLUENCE_SITE_URL: ${{ vars.CONFLUENCE_SITE_URL }}
           TAGS: ${{ needs.init-release.outputs.tags }}
           TITLE: ${{ needs.init-release.outputs.title }}
-          URL: ${{ needs.create-confluence-page.outputs.page_url }}
+          PAGE_PATH: ${{ needs.create-confluence-page.outputs.page_path }}
         run: |
+          URL="${CONFLUENCE_SITE_URL%/}/wiki${PAGE_PATH}"
+
           jq -n \
             --arg tags "$TAGS" \
             --arg title "$TITLE" \
@@ -263,12 +275,17 @@ jobs:
     steps:
       - name: Create file
         shell: bash
+        env:
+          CONFLUENCE_SITE_URL: ${{ vars.CONFLUENCE_SITE_URL }}
+          PAGE_PATH: ${{ needs.create-confluence-page.outputs.page_path }}
         run: |
+          URL="${CONFLUENCE_SITE_URL%/}/wiki${PAGE_PATH}"
+
           cat <<EOF > release-note.md
           # ${{ needs.init-release.outputs.title }}
 
           Confluence:
-          ${{ needs.create-confluence-page.outputs.page_url }}
+          ${URL}
           EOF
 
       - name: Upload artifact
