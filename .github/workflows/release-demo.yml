@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Release version"
+        description: "Release version (e.g. 1.0.0)"
         required: true
         default: "1.0.0"
 
@@ -42,6 +42,8 @@ jobs:
       project: ${{ steps.meta.outputs.project }}
       version: ${{ steps.meta.outputs.version }}
       date: ${{ steps.meta.outputs.date }}
+      short_date: ${{ steps.meta.outputs.short_date }}
+      date_iso: ${{ steps.meta.outputs.date_iso }}
       title: ${{ steps.meta.outputs.title }}
       tags: ${{ steps.meta.outputs.tags }}
       branch_name: ${{ steps.meta.outputs.branch_name }}
@@ -57,6 +59,7 @@ jobs:
           VERSION="${{ github.event.inputs.version }}"
           DATE=$(date +'%d.%m.%Y')
           SHORT_DATE=$(date +'%d.%m')
+          DATE_ISO=$(date +'%Y-%m-%d')
           BRANCH_NAME="${{ needs.validate-branch.outputs.branch_name }}"
 
           TITLE="Draft $PROJECT v$VERSION"
@@ -65,12 +68,26 @@ jobs:
           echo "project=$PROJECT" >> "$GITHUB_OUTPUT"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "date=$DATE" >> "$GITHUB_OUTPUT"
+          echo "short_date=$SHORT_DATE" >> "$GITHUB_OUTPUT"
+          echo "date_iso=$DATE_ISO" >> "$GITHUB_OUTPUT"
           echo "title=$TITLE" >> "$GITHUB_OUTPUT"
           echo "tags=$TAGS" >> "$GITHUB_OUTPUT"
           echo "branch_name=$BRANCH_NAME" >> "$GITHUB_OUTPUT"
 
-  create-confluence-draft:
-    name: Create Confluence Draft
+      - name: Debug output
+        shell: bash
+        run: |
+          echo "Project: ${{ steps.meta.outputs.project }}"
+          echo "Version: ${{ steps.meta.outputs.version }}"
+          echo "Date: ${{ steps.meta.outputs.date }}"
+          echo "Short date: ${{ steps.meta.outputs.short_date }}"
+          echo "Date ISO: ${{ steps.meta.outputs.date_iso }}"
+          echo "Title: ${{ steps.meta.outputs.title }}"
+          echo "Tags: ${{ steps.meta.outputs.tags }}"
+          echo "Branch: ${{ steps.meta.outputs.branch_name }}"
+
+  create-confluence-page:
+    name: Create Confluence Page
     runs-on: ubuntu-latest
     needs: init-release
 
@@ -81,7 +98,7 @@ jobs:
       - name: Install jq
         run: sudo apt-get update && sudo apt-get install -y jq
 
-      - name: Create draft page
+      - name: Create Confluence page
         id: create
         shell: bash
         env:
@@ -92,39 +109,144 @@ jobs:
           PARENT_ID: ${{ secrets.CONFLUENCE_PARENT_PAGE_ID }}
 
           TITLE: ${{ needs.init-release.outputs.title }}
-          DATE: ${{ needs.init-release.outputs.date }}
+          DATE: ${{ needs.init-release.outputs.date_iso }}
+          SHORT_DATE: ${{ needs.init-release.outputs.short_date }}
+          VERSION: ${{ needs.init-release.outputs.version }}
+          PROJECT: ${{ needs.init-release.outputs.project }}
           BRANCH: ${{ needs.init-release.outputs.branch_name }}
           TAGS: ${{ needs.init-release.outputs.tags }}
+
+          CP_FACT: ""
+          MF_FACT: ""
+          CP_RELEASED: "Released"
+          MF_RELEASED: ""
+
+          JIRA_RELEASE_URL: ${{ secrets.JIRA_RELEASE_URL }}
+          ISSUES_JQL_URL: ${{ secrets.ISSUES_JQL_URL }}
+
+          CP_DEVOPS_TASK: ${{ secrets.CP_DEVOPS_TASK }}
+          MF_DEVOPS_TASK: ${{ secrets.MF_DEVOPS_TASK }}
+          JIRA_SERVER_ID: ${{ secrets.JIRA_SERVER_ID }}
+          JIRA_SERVER_NAME: ${{ secrets.JIRA_SERVER_NAME }}
         run: |
           BODY=$(cat <<EOF
-          <h1>${TITLE}</h1>
-          <p><strong>Release planned</strong></p>
-          <p>CP - ${DATE}</p>
-          <p>MF - ${DATE}</p>
-
-          <p><strong>Branch</strong></p>
-          <p>${BRANCH}</p>
-
-          <p><strong>Tags</strong></p>
-          <p>${TAGS}</p>
+          <table data-table-width="1484" data-layout="align-start">
+            <colgroup>
+              <col style="width: 151.0px;" />
+              <col style="width: 1333.0px;" />
+            </colgroup>
+            <tbody>
+              <tr>
+                <th><p><strong>Release planned</strong></p></th>
+                <td>
+                  <p>CP - <time datetime="${DATE}" /> <br />MF - <time datetime="${DATE}" /></p>
+                </td>
+              </tr>
+              <tr>
+                <th><p><strong>Release fact</strong></p></th>
+                <td>
+                  <p>CP - ${CP_FACT}<br />MF - ${MF_FACT}</p>
+                </td>
+              </tr>
+              <tr>
+                <th><p><strong>Release status</strong></p></th>
+                <td>
+                  <p>CP - ${CP_RELEASED}<br />MF - ${MF_RELEASED}</p>
+                </td>
+              </tr>
+            </tbody>
+          </table>
 
           <h2>Release notes</h2>
-          <p>To be filled</p>
+          <p>Ссылки на релизы в Jira</p>
+          <ul>
+            <li>
+              <p>${PROJECT} - <a href="${JIRA_RELEASE_URL}">${JIRA_RELEASE_URL}</a></p>
+            </li>
+          </ul>
 
-          <h2>Env changes</h2>
-          <p>To be filled</p>
+          <p>Что было сделано в рамках релиза</p>
+          <p>#releaseb2b #релиз${SHORT_DATE} #${PROJECT} v${VERSION}</p>
 
-          <h2>Jobs to run</h2>
-          <p>To be filled</p>
+          <p>Добавили</p>
+          <ac:structured-macro ac:name="code" ac:schema-version="1">
+            <ac:parameter ac:name="breakoutMode">wide</ac:parameter>
+            <ac:parameter ac:name="breakoutWidth">1800</ac:parameter>
+            <ac:plain-text-body><![CDATA[-]]></ac:plain-text-body>
+          </ac:structured-macro>
 
-          <h2>Pre-release tasks</h2>
-          <p>To be filled</p>
+          <p>Обновили</p>
+          <ac:structured-macro ac:name="code" ac:schema-version="1">
+            <ac:parameter ac:name="breakoutMode">wide</ac:parameter>
+            <ac:parameter ac:name="breakoutWidth">1800</ac:parameter>
+            <ac:plain-text-body><![CDATA[-]]></ac:plain-text-body>
+          </ac:structured-macro>
 
-          <h2>Release tasks</h2>
-          <p>To be filled</p>
+          <p>Убрали</p>
+          <ac:structured-macro ac:name="code" ac:schema-version="1">
+            <ac:parameter ac:name="breakoutMode">wide</ac:parameter>
+            <ac:parameter ac:name="breakoutWidth">1800</ac:parameter>
+            <ac:plain-text-body><![CDATA[-]]></ac:plain-text-body>
+          </ac:structured-macro>
 
-          <h2>Issues</h2>
-          <p>To be filled</p>
+          <h2><strong>Env changes</strong></h2>
+
+          <p>Удалённые переменные:</p>
+          <ac:structured-macro ac:name="code" ac:schema-version="1">
+            <ac:parameter ac:name="breakoutMode">wide</ac:parameter>
+            <ac:parameter ac:name="breakoutWidth">1800</ac:parameter>
+            <ac:plain-text-body><![CDATA[-]]></ac:plain-text-body>
+          </ac:structured-macro>
+
+          <p>Новые переменные:</p>
+          <ac:structured-macro ac:name="code" ac:schema-version="1">
+            <ac:parameter ac:name="breakoutMode">wide</ac:parameter>
+            <ac:parameter ac:name="breakoutWidth">1800</ac:parameter>
+            <ac:plain-text-body><![CDATA[-]]></ac:plain-text-body>
+          </ac:structured-macro>
+
+          <p>Измененные переменные:</p>
+          <ac:structured-macro ac:name="code" ac:schema-version="1">
+            <ac:parameter ac:name="breakoutMode">wide</ac:parameter>
+            <ac:parameter ac:name="breakoutWidth">1800</ac:parameter>
+            <ac:plain-text-body><![CDATA[-]]></ac:plain-text-body>
+          </ac:structured-macro>
+
+          <h3>Jobs to run</h3>
+          <p style="margin-left: 30.0px;"><strong>Для CP</strong>:</p>
+          <p><strong>Для MF</strong>:</p>
+
+          <h3>Pre-release tasks</h3>
+          <ul>
+            <li><p>CP</p></li>
+            <li><p>MF</p></li>
+          </ul>
+
+          <h3>Release tasks</h3>
+          <ul>
+            <li>
+              <p>
+                CP
+                <ac:structured-macro ac:name="jira" ac:schema-version="1">
+                  <ac:parameter ac:name="key">${CP_DEVOPS_TASK}</ac:parameter>
+                  <ac:parameter ac:name="serverId">${JIRA_SERVER_ID}</ac:parameter>
+                  <ac:parameter ac:name="server">${JIRA_SERVER_NAME}</ac:parameter>
+                </ac:structured-macro>
+              </p>
+            </li>
+            <li>
+              <p>
+                MF
+                <ac:structured-macro ac:name="jira" ac:schema-version="1">
+                  <ac:parameter ac:name="key">${MF_DEVOPS_TASK}</ac:parameter>
+                  <ac:parameter ac:name="serverId">${JIRA_SERVER_ID}</ac:parameter>
+                  <ac:parameter ac:name="server">${JIRA_SERVER_NAME}</ac:parameter>
+                </ac:structured-macro>
+              </p>
+            </li>
+          </ul>
+
+          <p><a href="${ISSUES_JQL_URL}">${ISSUES_JQL_URL}</a></p>
           EOF
           )
 
@@ -148,6 +270,7 @@ jobs:
           HTTP=$(curl -s -o response.json -w "%{http_code}" \
             -X POST "$BASE_URL/wiki/api/v2/pages" \
             -u "$EMAIL:$TOKEN" \
+            -H "Accept: application/json" \
             -H "Content-Type: application/json" \
             --data @body.json)
 
@@ -159,7 +282,13 @@ jobs:
             exit 1
           fi
 
-          URL=$(jq -r '._links.base + ._links.webui' response.json)
+          URL=$(jq -r 'if ._links and ._links.base and ._links.webui then (._links.base + ._links.webui) else "" end' response.json)
+
+          if [[ -z "$URL" || "$URL" == "null" ]]; then
+            echo "Confluence page URL not found"
+            exit 1
+          fi
+
           echo "page_url=$URL" >> "$GITHUB_OUTPUT"
 
   send-slack:
@@ -167,7 +296,7 @@ jobs:
     runs-on: ubuntu-latest
     needs:
       - init-release
-      - create-confluence-draft
+      - create-confluence-page
 
     steps:
       - name: Install jq
@@ -179,47 +308,51 @@ jobs:
           WEBHOOK: ${{ secrets.SLACK_WEBHOOK_URL }}
           TAGS: ${{ needs.init-release.outputs.tags }}
           TITLE: ${{ needs.init-release.outputs.title }}
-          URL: ${{ needs.create-confluence-draft.outputs.page_url }}
+          URL: ${{ needs.create-confluence-page.outputs.page_url }}
         run: |
-          jq -n \
-            --arg text "$TAGS\n\n$TITLE\n$URL" \
-            '{text: $text}' > payload.json
+          TEXT="$TAGS
 
-          cat payload.json
+  $TITLE
+  $URL"
 
-          HTTP=$(curl -s -o response.txt -w "%{http_code}" \
-            -X POST \
-            -H "Content-Type: application/json" \
-            --data @payload.json \
-            "$WEBHOOK")
+jq -n --arg text "$TEXT" '{text: $text}' > payload.json
+  
+  cat payload.json
+  
+  HTTP=$(curl -s -o response.txt -w "%{http_code}" \
+  -X POST \
+-H "Content-Type: application/json" \
+  --data @payload.json \
+  "$WEBHOOK")
 
-          echo "HTTP: $HTTP"
-          cat response.txt
+echo "HTTP: $HTTP"
+  cat response.txt
+  
+  if [[ "$HTTP" -lt 200 || "$HTTP" -ge 300 ]]; then
+  echo "Slack failed"
+  exit 1
+  fi
 
-          if [[ "$HTTP" -lt 200 || "$HTTP" -ge 300 ]]; then
-            echo "Slack failed"
-            exit 1
-          fi
+generate-release-note:
+  name: Generate Artifact
+  runs-on: ubuntu-latest
+  needs:
+    - init-release
+    - create-confluence-page
 
-  generate-release-note:
-    name: Generate Artifact
-    runs-on: ubuntu-latest
-    needs:
-      - init-release
-      - create-confluence-draft
+  steps:
+    - name: Create file
+      shell: bash
+      run: |
+        cat <<EOF > release-note.md
+        # ${{ needs.init-release.outputs.title }}
+        
+        Confluence:
+        ${{ needs.create-confluence-page.outputs.page_url }}
+        EOF
 
-    steps:
-      - name: Create file
-        run: |
-          cat <<EOF > release-note.md
-          # ${{ needs.init-release.outputs.title }}
-
-          Confluence:
-          ${{ needs.create-confluence-draft.outputs.page_url }}
-          EOF
-
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: release-note
-          path: release-note.md
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: release-note
+        path: release-note.md
