@@ -74,18 +74,6 @@ jobs:
           echo "tags=$TAGS" >> "$GITHUB_OUTPUT"
           echo "branch_name=$BRANCH_NAME" >> "$GITHUB_OUTPUT"
 
-      - name: Debug output
-        shell: bash
-        run: |
-          echo "Project: ${{ steps.meta.outputs.project }}"
-          echo "Version: ${{ steps.meta.outputs.version }}"
-          echo "Date: ${{ steps.meta.outputs.date }}"
-          echo "Short date: ${{ steps.meta.outputs.short_date }}"
-          echo "Date ISO: ${{ steps.meta.outputs.date_iso }}"
-          echo "Title: ${{ steps.meta.outputs.title }}"
-          echo "Tags: ${{ steps.meta.outputs.tags }}"
-          echo "Branch: ${{ steps.meta.outputs.branch_name }}"
-
   create-confluence-page:
     name: Create Confluence Page
     runs-on: ubuntu-latest
@@ -113,142 +101,38 @@ jobs:
           SHORT_DATE: ${{ needs.init-release.outputs.short_date }}
           VERSION: ${{ needs.init-release.outputs.version }}
           PROJECT: ${{ needs.init-release.outputs.project }}
-          BRANCH: ${{ needs.init-release.outputs.branch_name }}
-          TAGS: ${{ needs.init-release.outputs.tags }}
-
-          CP_FACT: ""
-          MF_FACT: ""
-          CP_RELEASED: "Released"
-          MF_RELEASED: ""
 
           JIRA_RELEASE_URL: ${{ secrets.JIRA_RELEASE_URL }}
           ISSUES_JQL_URL: ${{ secrets.ISSUES_JQL_URL }}
 
-          CP_DEVOPS_TASK: ${{ secrets.CP_DEVOPS_TASK }}
-          MF_DEVOPS_TASK: ${{ secrets.MF_DEVOPS_TASK }}
-          JIRA_SERVER_ID: ${{ secrets.JIRA_SERVER_ID }}
-          JIRA_SERVER_NAME: ${{ secrets.JIRA_SERVER_NAME }}
         run: |
           BODY=$(cat <<EOF
-          <table data-table-width="1484" data-layout="align-start">
-            <colgroup>
-              <col style="width: 151.0px;" />
-              <col style="width: 1333.0px;" />
-            </colgroup>
-            <tbody>
-              <tr>
-                <th><p><strong>Release planned</strong></p></th>
-                <td>
-                  <p>CP - <time datetime="${DATE}" /> <br />MF - <time datetime="${DATE}" /></p>
-                </td>
-              </tr>
-              <tr>
-                <th><p><strong>Release fact</strong></p></th>
-                <td>
-                  <p>CP - ${CP_FACT}<br />MF - ${MF_FACT}</p>
-                </td>
-              </tr>
-              <tr>
-                <th><p><strong>Release status</strong></p></th>
-                <td>
-                  <p>CP - ${CP_RELEASED}<br />MF - ${MF_RELEASED}</p>
-                </td>
-              </tr>
-            </tbody>
-          </table>
+<h1>${TITLE}</h1>
 
-          <h2>Release notes</h2>
-          <p>Ссылки на релизы в Jira</p>
-          <ul>
-            <li>
-              <p>${PROJECT} - <a href="${JIRA_RELEASE_URL}">${JIRA_RELEASE_URL}</a></p>
-            </li>
-          </ul>
+<p><strong>Release planned:</strong></p>
+<p>CP - ${DATE}<br/>MF - ${DATE}</p>
 
-          <p>Что было сделано в рамках релиза</p>
-          <p>#releaseb2b #релиз${SHORT_DATE} #${PROJECT} v${VERSION}</p>
+<h2>Release notes</h2>
+<p>${PROJECT} - <a href="${JIRA_RELEASE_URL}">${JIRA_RELEASE_URL}</a></p>
 
-          <p>Добавили</p>
-          <ac:structured-macro ac:name="code" ac:schema-version="1">
-            <ac:parameter ac:name="breakoutMode">wide</ac:parameter>
-            <ac:parameter ac:name="breakoutWidth">1800</ac:parameter>
-            <ac:plain-text-body><![CDATA[-]]></ac:plain-text-body>
-          </ac:structured-macro>
+<p>#releaseb2b #релиз${SHORT_DATE} #${PROJECT} v${VERSION}</p>
 
-          <p>Обновили</p>
-          <ac:structured-macro ac:name="code" ac:schema-version="1">
-            <ac:parameter ac:name="breakoutMode">wide</ac:parameter>
-            <ac:parameter ac:name="breakoutWidth">1800</ac:parameter>
-            <ac:plain-text-body><![CDATA[-]]></ac:plain-text-body>
-          </ac:structured-macro>
+<h2>Env changes</h2>
+<p>To be filled</p>
 
-          <p>Убрали</p>
-          <ac:structured-macro ac:name="code" ac:schema-version="1">
-            <ac:parameter ac:name="breakoutMode">wide</ac:parameter>
-            <ac:parameter ac:name="breakoutWidth">1800</ac:parameter>
-            <ac:plain-text-body><![CDATA[-]]></ac:plain-text-body>
-          </ac:structured-macro>
+<h2>Jobs to run</h2>
+<p>To be filled</p>
 
-          <h2><strong>Env changes</strong></h2>
+<h2>Pre-release tasks</h2>
+<p>To be filled</p>
 
-          <p>Удалённые переменные:</p>
-          <ac:structured-macro ac:name="code" ac:schema-version="1">
-            <ac:parameter ac:name="breakoutMode">wide</ac:parameter>
-            <ac:parameter ac:name="breakoutWidth">1800</ac:parameter>
-            <ac:plain-text-body><![CDATA[-]]></ac:plain-text-body>
-          </ac:structured-macro>
+<h2>Release tasks</h2>
+<p>To be filled</p>
 
-          <p>Новые переменные:</p>
-          <ac:structured-macro ac:name="code" ac:schema-version="1">
-            <ac:parameter ac:name="breakoutMode">wide</ac:parameter>
-            <ac:parameter ac:name="breakoutWidth">1800</ac:parameter>
-            <ac:plain-text-body><![CDATA[-]]></ac:plain-text-body>
-          </ac:structured-macro>
-
-          <p>Измененные переменные:</p>
-          <ac:structured-macro ac:name="code" ac:schema-version="1">
-            <ac:parameter ac:name="breakoutMode">wide</ac:parameter>
-            <ac:parameter ac:name="breakoutWidth">1800</ac:parameter>
-            <ac:plain-text-body><![CDATA[-]]></ac:plain-text-body>
-          </ac:structured-macro>
-
-          <h3>Jobs to run</h3>
-          <p style="margin-left: 30.0px;"><strong>Для CP</strong>:</p>
-          <p><strong>Для MF</strong>:</p>
-
-          <h3>Pre-release tasks</h3>
-          <ul>
-            <li><p>CP</p></li>
-            <li><p>MF</p></li>
-          </ul>
-
-          <h3>Release tasks</h3>
-          <ul>
-            <li>
-              <p>
-                CP
-                <ac:structured-macro ac:name="jira" ac:schema-version="1">
-                  <ac:parameter ac:name="key">${CP_DEVOPS_TASK}</ac:parameter>
-                  <ac:parameter ac:name="serverId">${JIRA_SERVER_ID}</ac:parameter>
-                  <ac:parameter ac:name="server">${JIRA_SERVER_NAME}</ac:parameter>
-                </ac:structured-macro>
-              </p>
-            </li>
-            <li>
-              <p>
-                MF
-                <ac:structured-macro ac:name="jira" ac:schema-version="1">
-                  <ac:parameter ac:name="key">${MF_DEVOPS_TASK}</ac:parameter>
-                  <ac:parameter ac:name="serverId">${JIRA_SERVER_ID}</ac:parameter>
-                  <ac:parameter ac:name="server">${JIRA_SERVER_NAME}</ac:parameter>
-                </ac:structured-macro>
-              </p>
-            </li>
-          </ul>
-
-          <p><a href="${ISSUES_JQL_URL}">${ISSUES_JQL_URL}</a></p>
-          EOF
-          )
+<h2>Issues</h2>
+<p><a href="${ISSUES_JQL_URL}">${ISSUES_JQL_URL}</a></p>
+EOF
+)
 
           jq -n \
             --arg spaceId "$SPACE_ID" \
@@ -270,7 +154,6 @@ jobs:
           HTTP=$(curl -s -o response.json -w "%{http_code}" \
             -X POST "$BASE_URL/wiki/api/v2/pages" \
             -u "$EMAIL:$TOKEN" \
-            -H "Accept: application/json" \
             -H "Content-Type: application/json" \
             --data @body.json)
 
@@ -285,7 +168,7 @@ jobs:
           URL=$(jq -r 'if ._links and ._links.base and ._links.webui then (._links.base + ._links.webui) else "" end' response.json)
 
           if [[ -z "$URL" || "$URL" == "null" ]]; then
-            echo "Confluence page URL not found"
+            echo "Failed to extract URL"
             exit 1
           fi
 
@@ -302,7 +185,7 @@ jobs:
       - name: Install jq
         run: sudo apt-get update && sudo apt-get install -y jq
 
-      - name: Send message to Slack
+      - name: Send message
         shell: bash
         env:
           WEBHOOK: ${{ secrets.SLACK_WEBHOOK_URL }}
@@ -310,10 +193,14 @@ jobs:
           TITLE: ${{ needs.init-release.outputs.title }}
           URL: ${{ needs.create-confluence-page.outputs.page_url }}
         run: |
-          printf '%s\n\n%s\n%s\n' "$TAGS" "$TITLE" "$URL" > message.txt
+          printf '%s\n\n<%s|%s>\n' "$TAGS" "$URL" "$TITLE" > message.txt
+
+          echo "=== Slack message preview ==="
           cat message.txt
 
-          jq -Rs '{text: .}' < message.txt > payload.json
+          jq -Rs '{text: ., mrkdwn: true}' < message.txt > payload.json
+
+          echo "=== Slack payload ==="
           cat payload.json
 
           HTTP=$(curl -s -o response.txt -w "%{http_code}" \
@@ -339,14 +226,13 @@ jobs:
 
     steps:
       - name: Create file
-        shell: bash
         run: |
           cat <<EOF > release-note.md
-          # ${{ needs.init-release.outputs.title }}
+# ${{ needs.init-release.outputs.title }}
 
-          Confluence:
-          ${{ needs.create-confluence-page.outputs.page_url }}
-          EOF
+Confluence:
+${{ needs.create-confluence-page.outputs.page_url }}
+EOF
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
