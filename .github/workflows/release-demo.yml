@@ -110,7 +110,7 @@ jobs:
           <h1>${TITLE}</h1>
 
           <p><strong>Release planned:</strong></p>
-          <p>CP - ${DATE}<br/>MF - ${DATE}</p>
+          <p>CP - ${DATE}<br />MF - ${DATE}</p>
 
           <h2>Release notes</h2>
           <p>${PROJECT} - <a href="${JIRA_RELEASE_URL}">${JIRA_RELEASE_URL}</a></p>
@@ -166,29 +166,12 @@ jobs:
             exit 1
           fi
 
-          WEBUI=$(jq -r '._links.webui // ""' response.json)
-          PAGE_ID=$(jq -r '.id // ""' response.json)
-
-          echo "WEBUI: $WEBUI"
-          echo "PAGE_ID: $PAGE_ID"
-
-          if [[ -n "$WEBUI" && "$WEBUI" != "null" ]]; then
-            if [[ "$WEBUI" =~ ^https?:// ]]; then
-              URL="$WEBUI"
-            elif [[ "$WEBUI" == /wiki/* ]]; then
-              URL="${BASE_URL%/}$WEBUI"
-            else
-              URL="${BASE_URL%/}/wiki$WEBUI"
-            fi
-          else
-            echo "Failed to extract _links.webui from Confluence response"
-            exit 1
-          fi
+          URL=$(jq -r '._links.base + ._links.webui' response.json)
 
           echo "Resolved page URL: $URL"
 
           if [[ -z "$URL" || "$URL" == "null" ]]; then
-            echo "Failed to build page URL"
+            echo "Failed to extract page URL"
             exit 1
           fi
 
