@@ -165,23 +165,17 @@ jobs:
 
           <p><strong>Removed variables</strong></p>
           <ac:structured-macro ac:name="code">
-            <ac:plain-text-body><![CDATA[
--
-            ]]></ac:plain-text-body>
+            <ac:plain-text-body><![CDATA[-]]></ac:plain-text-body>
           </ac:structured-macro>
 
           <p><strong>New variables</strong></p>
           <ac:structured-macro ac:name="code">
-            <ac:plain-text-body><![CDATA[
--
-            ]]></ac:plain-text-body>
+            <ac:plain-text-body><![CDATA[-]]></ac:plain-text-body>
           </ac:structured-macro>
 
           <p><strong>Updated variables</strong></p>
           <ac:structured-macro ac:name="code">
-            <ac:plain-text-body><![CDATA[
--
-            ]]></ac:plain-text-body>
+            <ac:plain-text-body><![CDATA[-]]></ac:plain-text-body>
           </ac:structured-macro>
 
           <h3>Jobs to run</h3>
