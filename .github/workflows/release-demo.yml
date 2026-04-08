@@ -101,6 +101,7 @@ jobs:
           SHORT_DATE: ${{ needs.init-release.outputs.short_date }}
           VERSION: ${{ needs.init-release.outputs.version }}
           PROJECT: ${{ needs.init-release.outputs.project }}
+          TAGS: ${{ needs.init-release.outputs.tags }}
 
           JIRA_RELEASE_URL: ${{ secrets.JIRA_RELEASE_URL }}
           ISSUES_JQL_URL: ${{ secrets.ISSUES_JQL_URL }}
