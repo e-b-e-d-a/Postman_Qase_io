@@ -109,28 +109,107 @@ jobs:
           BODY=$(cat <<EOF
           <h1>${TITLE}</h1>
 
-          <p><strong>Release planned:</strong></p>
-          <p>CP - ${DATE}<br />MF - ${DATE}</p>
+          <table>
+            <tbody>
+              <tr>
+                <th><strong>Release planned</strong></th>
+                <td>
+                  CP - ${DATE}<br/>
+                  MF -
+                </td>
+              </tr>
+              <tr>
+                <th><strong>Release fact</strong></th>
+                <td>
+                  CP -<br/>
+                  MF -
+                </td>
+              </tr>
+              <tr>
+                <th><strong>Release status</strong></th>
+                <td>
+                  CP - Planned<br/>
+                  MF -
+                </td>
+              </tr>
+            </tbody>
+          </table>
 
           <h2>Release notes</h2>
-          <p>${PROJECT} - <a href="${JIRA_RELEASE_URL}">${JIRA_RELEASE_URL}</a></p>
 
-          <p>#releaseb2b #релиз${SHORT_DATE} #${PROJECT} v${VERSION}</p>
+          <p><strong>Jira releases:</strong></p>
+          <ul>
+            <li>${PROJECT} - <a href="${JIRA_RELEASE_URL}">${JIRA_RELEASE_URL}</a></li>
+          </ul>
+
+          <p><strong>Summary:</strong></p>
+          <p>${TAGS}</p>
+
+          <h3>Added</h3>
+          <ul>
+            <li><em>To be filled</em></li>
+          </ul>
+
+          <h3>Updated</h3>
+          <ul>
+            <li><em>To be filled</em></li>
+          </ul>
+
+          <h3>Removed</h3>
+          <ul>
+            <li><em>To be filled</em></li>
+          </ul>
 
           <h2>Env changes</h2>
-          <p>To be filled</p>
 
-          <h2>Jobs to run</h2>
-          <p>To be filled</p>
+          <p><strong>Removed variables</strong></p>
+          <ac:structured-macro ac:name="code">
+            <ac:plain-text-body><![CDATA[
+-
+            ]]></ac:plain-text-body>
+          </ac:structured-macro>
 
-          <h2>Pre-release tasks</h2>
-          <p>To be filled</p>
+          <p><strong>New variables</strong></p>
+          <ac:structured-macro ac:name="code">
+            <ac:plain-text-body><![CDATA[
+-
+            ]]></ac:plain-text-body>
+          </ac:structured-macro>
 
-          <h2>Release tasks</h2>
-          <p>To be filled</p>
+          <p><strong>Updated variables</strong></p>
+          <ac:structured-macro ac:name="code">
+            <ac:plain-text-body><![CDATA[
+-
+            ]]></ac:plain-text-body>
+          </ac:structured-macro>
+
+          <h3>Jobs to run</h3>
+
+          <p><strong>CP:</strong></p>
+          <ul>
+            <li><em>To be filled</em></li>
+          </ul>
+
+          <p><strong>MF:</strong></p>
+          <ul>
+            <li><em>To be filled</em></li>
+          </ul>
+
+          <h3>Pre-release tasks</h3>
+          <ul>
+            <li>CP -</li>
+            <li>MF -</li>
+          </ul>
+
+          <h3>Release tasks</h3>
+          <ul>
+            <li>CP -</li>
+            <li>MF -</li>
+          </ul>
 
           <h2>Issues</h2>
           <p><a href="${ISSUES_JQL_URL}">${ISSUES_JQL_URL}</a></p>
+
           EOF
           )
 
