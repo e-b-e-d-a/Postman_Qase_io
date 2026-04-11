@@ -1,0 +1,61 @@
+name: Deploy to Sandbox
+
+on:
+  workflow_dispatch:
+    inputs:
+      service:
+        description: "Service name"
+        required: true
+        type: string
+      environment:
+        description: "Target environment"
+        required: true
+        type: string
+      tag:
+        description: "Release tag"
+        required: true
+        type: string
+      approved_by:
+        description: "Slack approver user id"
+        required: false
+        type: string
+      slack_channel:
+        description: "Slack channel id"
+        required: false
+        type: string
+      slack_ts:
+        description: "Slack message ts"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sandbox-${{ inputs.service }}-${{ inputs.tag }}
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Validate environment
+        run: |
+          test "${{ inputs.environment }}" = "sandbox"
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Print inputs
+        run: |
+          echo "service=${{ inputs.service }}"
+          echo "environment=${{ inputs.environment }}"
+          echo "tag=${{ inputs.tag }}"
+          echo "approved_by=${{ inputs.approved_by }}"
+          echo "slack_channel=${{ inputs.slack_channel }}"
+          echo "slack_ts=${{ inputs.slack_ts }}"
+
+      - name: Deploy to sandbox
+        run: |
+          ./scripts/deploy-sandbox.sh "${{ inputs.service }}" "${{ inputs.tag }}"
